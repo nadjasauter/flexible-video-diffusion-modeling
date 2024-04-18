@@ -20,7 +20,11 @@ from improved_diffusion.script_util import (
 from improved_diffusion.train_util import TrainLoop
 from improved_diffusion.logger import logger
 
-os.environ["MY_WANDB_DIR"] = "none"
+#@Nadja:
+os.environ["WANDB_PROJECT"] = "flexible"
+os.environ['WANDB_ENTITY'] = "nadja-sauter"
+
+
 if "--unobserve" in sys.argv:
     sys.argv.remove("--unobserve")
     os.environ["WANDB_MODE"] = "dryrun"
@@ -64,9 +68,9 @@ def num_available_cores():
 
 def main():
     args = create_argparser().parse_args()
-    # change direcotry for args.dataset
-    args.dataset = os.path.join('/export/scratch/ru89yug', args.dataset)
-    print('Dataset file path: ', args.dataset )
+    #args.dataset = os.path.join('/export/scratch/ru89yug/datasets/', args.dataset)
+    #args.dataset = '/export/scratch/ru89yug/datasets/carla/no-traffic'
+    #print('Dataset file path: ', args.dataset )
     if args.num_workers == -1:
         # Set the number of workers automatically.
         args.num_workers = max(num_available_cores() - 1, 1)
