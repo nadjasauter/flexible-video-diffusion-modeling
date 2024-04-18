@@ -64,9 +64,6 @@ def num_available_cores():
 
 def main():
     args = create_argparser().parse_args()
-    # change direcotry for args.dataset
-    args.dataset = os.path.join('/export/scratch/ru89yug', args.dataset)
-    print('Dataset file path: ', args.dataset )
     if args.num_workers == -1:
         # Set the number of workers automatically.
         args.num_workers = max(num_available_cores() - 1, 1)
