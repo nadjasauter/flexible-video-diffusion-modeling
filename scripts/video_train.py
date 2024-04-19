@@ -40,6 +40,7 @@ def init_wandb(config, id):
         wandb_dir = None
     wandb.init(entity=os.environ['WANDB_ENTITY'],
                project=os.environ['WANDB_PROJECT'],
+               name='test_run_nadja', 
                config=config, dir=wandb_dir, id=id)
     print(f"Wandb run id: {wandb.run.id}")
     num_nodes = 1

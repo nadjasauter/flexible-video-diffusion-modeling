@@ -34,6 +34,12 @@ def load_data(dataset_name, batch_size, T=None, deterministic=False, num_workers
     T = default_T_dict[dataset_name] if T is None else T
     shard = MPI.COMM_WORLD.Get_rank()
     num_shards = MPI.COMM_WORLD.Get_size()
+    
+    #@Nadja: dirty fix
+    print('data_path:', data_path)
+    data_path = '/export/scratch/ru89yug/datasets/carla/no-traffic'
+    print('data_path:', data_path)
+
     if dataset_name == "minerl":
         data_path = os.path.join(data_path, "train")
         dataset = MineRLDataset(data_path, shard=shard, num_shards=num_shards, T=T)
