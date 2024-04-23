@@ -35,7 +35,7 @@ def load_data(dataset_name, batch_size, T=None, deterministic=False, num_workers
     shard = MPI.COMM_WORLD.Get_rank()
     num_shards = MPI.COMM_WORLD.Get_size()
     
-    #@Nadja: dirty fix
+    #@Nadja: fast fix dataset path
     print('data_path:', data_path)
     data_path = '/export/scratch/ru89yug/datasets/carla/no-traffic'
     print('data_path:', data_path)
