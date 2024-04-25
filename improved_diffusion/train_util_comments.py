@@ -290,17 +290,17 @@ class TrainLoop:
 
     def forward_backward(self): # part of run_step, IMPORTANT PART!!!!!!! -> lightning
         # forward and backward step in once
-        zero_grad(self.model_params)
-        batch1 = next(self.data)[0]
+        zero_grad(self.model_params) # probably drop
+        batch1 = next(self.data)[0] # half batchc in lightning
         batch2 = next(self.data)[0] if self.pad_with_random_frames else None
-        for i in range(0, batch1.shape[0], self.microbatch): # automatic by lightning, drop
+        for i in range(0, batch1.shape[0], self.microbatch): # copy 
             # basic example: 
             # for batch_idx, (data, target) in enumerate (train_loader):
             # data,target = data.to(device), target.to(device)
             micro1 = batch1[i : i + self.microbatch]
             micro2 = batch2[i:i + self.microbatch] if batch2 is not None else None
             micro, frame_indices, obs_mask, latent_mask = self.sample_all_masks(micro1, micro2)
-            micro = micro.to(dist_util.dev())
+            micro = micro.to(dist_util.dev()) # to dev -> drop
             frame_indices = frame_indices.to(dist_util.dev())
             obs_mask = obs_mask.to(dist_util.dev())
             latent_mask = latent_mask.to(dist_util.dev())
@@ -319,7 +319,7 @@ class TrainLoop:
                 eval_mask=latent_mask,
             )
 
-            if last_batch or not self.use_ddp:
+            if last_batch or not self.use_ddp: # self.use_ddp -> depth-fm, pass to trainer
                 losses = compute_losses() #losses @training_step
             else:
                 with self.ddp_model.no_sync():

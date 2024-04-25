@@ -1,6 +1,7 @@
 from abc import abstractmethod
 
 import math
+import functools
 
 import numpy as np
 import torch as th
@@ -9,6 +10,8 @@ import pytorch_lightning as pl
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim import lr_scheduler
+from torch.optim import AdamW
+from .resample import LossAwareSampler, UniformSampler
 
 from .fp16_util import convert_module_to_f16, convert_module_to_f32
 from .nn import (
@@ -284,6 +287,8 @@ class UNetVideoModelLighning(pl.LightningModule):
         num_heads_upsample=-1,
         use_scale_shift_norm=False,
         use_rpe_net=False,
+        ### lighnging parameters
+        schedule_sampler
     ):
         super().__init__()
 
@@ -405,6 +410,23 @@ class UNetVideoModelLighning(pl.LightningModule):
             zero_module(conv_nd(dims, model_channels, out_channels, 3, padding=1)),
         )
 
+        ## lightning initalisierung
+        self.schedule_sampler = schedule_sampler or UniformSampler(diffusion)
+        ## DDP variables for lighning ????
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
     def convert_to_fp16(self):
         """
         Convert the torso of the model to float16.
@@ -517,27 +539,41 @@ class UNetVideoModelLighning(pl.LightningModule):
     def configure_optimizers(self): # changed
         #optimizer
         self.opt = AdamW(self.master_params, lr=self.lr, weight_decay=self.weight_decay) 
-        #scheduler
-        t, weights = self.schedule_sampler.sample(micro.shape[0], dist_util.dev())
-        if isinstance(self.schedule_sampler, LossAwareSampler):
-                self.schedule_sampler.update_with_local_losses( #scheduler, training rate  @configure_optimizers
-                    t, losses["loss"].detach()
-                )
-
-        return [optimizer], [lr_scheduler]
+        #scheduler -> training
+        #from .resample import LossAwareSampler, UniformSampler
+        return  self.opt #, self.schedule_sampler # brackeets might not be neccassary
     
 
     '''
         def training_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.encoder(x)
+        y_hat = self.encoder(x)n
         loss = F.cross_entropy(y_hat, y)
         return loss
     '''
     def training_step(self, batch, batch_idx): # TBD: run_loop in train_util.py
-        batch1 = next(self.data)[0]
-        batch2 = next(self.data)[0] if self.pad_with_random_frames else None
-        compute_losses = functools.partial( #losses @training_step
+        # step -> just producing losses
+        # split batch in half
+        # important: batch size doppelt
+        batch1 = batch[:int(batch.shape[0]/2)] #next(self.data)[0]
+        batch2 = batch[int(batch.shape[0]/2):] #next(self.data)[0] if self.pad_with_random_frames else None
+        
+        for i in range(0, batch1.shape[0], self.microbatch): # copy 
+            # basic example: 
+            # for batch_idx, (data, target) in enumerate (train_loader):
+            # data,target = data.to(device), target.to(device)
+            micro1 = batch1[i : i + self.microbatch]
+            micro2 = batch2[i:i + self.microbatch] if batch2 is not None else None
+            micro, frame_indices, obs_mask, latent_mask = self.sample_all_masks(micro1, micro2)
+            #micro = micro.to(dist_util.dev()) # to dev -> drop
+            #frame_indices = frame_indices.to(dist_util.dev())
+            #obs_mask = obs_mask.to(dist_util.dev())
+            #latent_mask = latent_mask.to(dist_util.dev())
+
+            last_batch = (i + self.microbatch) >= batch1.shape[0]
+            t, weights = self.schedule_sampler.sample(micro.shape[0]) #@configure_optimizers
+
+            compute_losses = functools.partial( #losses @training_step
                 self.diffusion.training_losses,
                 self.ddp_model,
                 micro,
@@ -548,24 +584,34 @@ class UNetVideoModelLighning(pl.LightningModule):
                 eval_mask=latent_mask,
             )
 
-            if last_batch or not self.use_ddp:
+            if last_batch or not self.use_ddp: # self.use_ddp -> depth-fm, pass to trainer
                 losses = compute_losses() #losses @training_step
             else:
                 with self.ddp_model.no_sync():
                     losses = compute_losses() #losses @training_step
 
+            '''
+            Pytorch lighning unde the hood:
             if isinstance(self.schedule_sampler, LossAwareSampler):
                 self.schedule_sampler.update_with_local_losses( #scheduler  @configure_optimizers
                     t, losses["loss"].detach()
                 )
+            '''
 
             loss = (losses["loss"] * weights).mean() # weights -> optimizer, loss -> trainstep
             log_loss_dict(
                 self.diffusion, t, {k: v * weights for k, v in losses.items()}
             )
-        return loss
+            if self.use_fp16:
+                loss_scale = 2 ** self.lg_loss_scale
+                loss = (loss * loss_scale) # drop backward
+            return loss
 
 
+
+
+
+#pass it in the fit function -> depth-fm passind data directly fit
     def train_dataloader(self): 
         from improved_diffusion.video_datasets import load_data
         data = load_data(
@@ -575,7 +621,6 @@ class UNetVideoModelLighning(pl.LightningModule):
             num_workers=args.num_workers,
             )
         return data
-
 
 
 
