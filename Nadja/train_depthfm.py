@@ -7,6 +7,7 @@ import argparse
 import datetime
 from omegaconf import OmegaConf
 
+# @Nadja: Lighning modules loaded
 from pytorch_lightning import Trainer
 from pytorch_lightning import seed_everything
 from pytorch_lightning.loggers import CSVLogger
@@ -176,8 +177,9 @@ def main():
         print("Using CPU")
         gpu_kwargs = {'accelerator': 'cpu'}
 
+    #@Nadja: main lightning part
     trainer = Trainer(
-        logger=logger,
+        logger=logger, 
         callbacks=callbacks,
         **gpu_kwargs,
         # from config
